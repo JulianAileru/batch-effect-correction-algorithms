@@ -25,7 +25,7 @@ def batchEffectCorrection(D, M, method='ls'):
         raise ValueError("data matrix is expected to be shape (n_signals, n_samples)")
     
     if method == "ls":
-        #MAKE SURE data and batch labels have the same ordering
+        #ensure data and batch labels have the same ordering
         M = M.loc[D.columns]
 
         # Initialize design matrix with deviation encoding of categorical variables
