@@ -4,6 +4,7 @@ from sklearn.svm import SVR
 from sklearn.preprocessing import StandardScaler
 import matplotlib.pyplot as plt
 from scipy.stats import rankdata
+from sklearn.model_selection import GridSearchCV
 
 class MetNorm:
     def __init__(self,data,metadata):
@@ -21,7 +22,7 @@ class MetNorm:
         self.sample_signal = None
         self.sample_signal_idx = None
         self.normed = None
-        self.param_grid = {'kernel': ['rbf', 'linear'],'C': [0.1, 1, 10, 100],'gamma': ['scale', 0.01, 0.1, 1],'epsilon': [0.01, 0.1, 0.5]}
+        self.param_grid = {'kernel': ['rbf', 'linear','poly'],'C': [0.1, 1, 10, 100],'gamma': ['scale','auto', 0.01, 0.1, 1],'epsilon': [0.01, 0.1, 0.5]}
         
     def _top_correlated(self,n=5,method='spearman'):
         QC = self.QC.copy()
@@ -31,7 +32,7 @@ class MetNorm:
         signal_dict = {signal:None for signal in signals}
         for idx,signal in enumerate(signals):
             df = pd.Series(spearman_corr[:,idx],name=signal,index=signals)
-            df = df.sort_values(ascending=False)
+            df = df.sort_values(ascending=False,key=abs)
             df.drop(index=df.name,inplace=True)
             signal_dict[signal] = df.index.tolist()[:n]
         self.sorted_signals = signal_dict

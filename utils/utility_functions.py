@@ -46,11 +46,13 @@ def pca_plot(D, M, hue='sample_type', title="pca_plot", PC_n=None):
         plt.tight_layout()
         plt.show()
 
-def TIC(D):
-    copy = D.copy()
-    copy = copy.apply(lambda x: x/x.sum(),axis=1)
-    # assert (copy.sum(axis=1) == 1.0).all()
-    return copy
+def TIC(D,scale=True):
+    result = D.copy()
+    result = result.apply(lambda x: x/x.sum(),axis=1)
+    assert np.allclose(result.sum(axis=1),1.0)
+    if scale:
+        result = result * D.sum(axis=1).mean()
+    return result
 def RSD(D,plot=True,normal=True):
     qc = D[D.index.str.contains("SP")]
     if normal:

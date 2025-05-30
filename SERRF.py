@@ -7,6 +7,10 @@ from xgboost import XGBRFRegressor as XGR
 from sklearn.ensemble import RandomForestRegressor
 import gc 
 from sklearn.preprocessing import StandardScaler
+import os 
+import sys 
+sys.path.append(os.path.abspath(".."))
+from utils.utility_functions import TIC
 
 def return_corrs_train_and_target(arg):
     batch,QC,Sample,M = arg
@@ -63,7 +67,7 @@ def systematic_error_prediction(args):
     correct_sample = target.copy()
     pred_dict = {signal: None for signal in signals}
     for signal in tqdm(signals):
-        #rfr = XGR(booster='gbtree',subsample=1,num_parallel_tree=500)
+        
         rfr = RandomForestRegressor(n_estimators=500,min_samples_split=5,random_state=42)
         mean_ = train[signal].mean()
         train_scale_y = train[signal] - mean_
@@ -75,21 +79,20 @@ def systematic_error_prediction(args):
         pred_dict[signal] = predictions
         del rfr, train_scale_x, test_scale_x, train_scale_y
         gc.collect()
-        # norm[train.index_current_batch=='qc'] = e_current_batch[j, train.index_current_batch=='qc']/((predict(model, data = train_data)$prediction+mean(e_current_batch[j,train.index_current_batch=='qc'],na.rm=TRUE))/mean(all[j,sampleType.=='qc'],na.rm=TRUE))
+        
         correct_qc.loc[:, signal] = correct_qc[signal] / (
             (fitted_values + correct_qc[signal].mean()) / all.loc[all.index.isin(QC.index), signal].mean())
-        #norm[!train.index_current_batch=='qc'] = e_current_batch[j,!train.index_current_batch=='qc']/((predict(model,data = test_data)$predictions  + mean(e_current_batch[j, !train.index_current_batch=='qc'],na.rm=TRUE)- mean(predict(model,data = test_data)$predictions))/(median(all[j,!sampleType.=='qc'],na.rm = TRUE)))
+     
         t2 = correct_sample[signal] / ((predictions + (correct_sample[signal].mean() - np.mean(predictions))) / Sample[signal].median())
-        # neg_values = np.where(t2<0)
+        
         t2[t2 < 0] = correct_sample[signal][t2 < 0]
-        # t2.iloc[neg_values[0]] = correct_sample[signal].iloc[neg_values[0]]
+        
         correct_sample[signal] = t2
-        # norm[train.index_current_batch=='qc'] = norm[train.index_current_batch=='qc']/(median(norm[train.index_current_batch=='qc'],na.rm=TRUE)/median(all[j,sampleType.=='qc'],na.rm=TRUE)) #!!! putting all to the same batch level.
+        
         correct_qc.loc[:, signal] = correct_qc[signal] / (correct_qc[signal].median() / all.loc[all.index.isin(QC.index), signal].median())
-        #correct_qc = correct_qc / (correct_qc.median()/all[all.index.isin(QC.index)][signal].median())
-        #norm[!train.index_current_batch=='qc'] = norm[!train.index_current_batch=='qc']/(median(norm[!train.index_current_batch=='qc'],na.rm=TRUE)/median(all[j,!sampleType.=='qc'],na.rm=TRUE))
+      
         correct_sample.loc[:,signal] = correct_sample[signal] / (correct_sample[signal].median() / all.loc[all.index.isin(Sample.index),signal].median())
-        #correct_sample = correct_sample / (correct_sample.median() / all[all.index.isin(Sample.index)][signal].median())
+  
         del fitted_values, predictions,t2
         gc.collect()
     current_batch = pd.concat([correct_qc,correct_sample])
@@ -99,13 +102,12 @@ def find_outlier(sig,coef=3):
     iqr = Q3-Q1
     lower_bound = Q1 - coef * iqr
     upper_bound = Q3 + coef * iqr
-    #out = np.where((sig<lower_bound)|(sig>upper_bound))[0]
+
     return (sig < lower_bound) | (sig > upper_bound)
 def adjust_correction(current_batch,pred_dict):
     current_batch_pc = current_batch.copy()
     correct_sample = current_batch[current_batch.index.isin(Sample.index)].copy()
-    #correct_qc = current_batch[current_batch.index.isin(QC.index)]
-    #create boolean df for inf values or outliers
+
     inf_bool = current_batch.apply(lambda x: np.isinf(x))
     n_infs = current_batch[inf_bool].sum().values.sum()
     outlier_bool = current_batch.apply(lambda x: find_outlier(x))
@@ -136,21 +138,13 @@ def adjust_correction(current_batch,pred_dict):
     mask = current_batch.loc[current_batch.index.isin(Sample.index)] < 0
     current_batch = current_batch.mask(mask, current_batch_pc)
     normed = current_batch
-    # A = normed.loc[normed.index.isin(Sample.index)][signal].median()
-    # B = all.loc[all.index.isin(QC.index)][signal].median()
-    # C = all.loc[all.index.isin(Sample.index)][signal].median()
-    # D = all.loc[all.index.isin(Sample.index)][signal].std()
-    # E = normed.loc[normed.index.isin(Sample.index)][signal].std()
-    # F = normed.loc[~normed.index.isin(Sample.index)][signal].median()
-    # c = (A + ((B - C) / D * E)) / F
-    # normed[normed.index.isin(QC.index)] = normed[normed.index.isin(QC.index)] * c
     return normed 
         
 
 
 def compute_pool(QC, Sample, M, n_batches,signals):
     with Pool(processes=min(len(n_batches), 4)) as p:
-        corr_arr = list(tqdm(p.imap(return_corrs_train_and_target, [(batch, QC, Sample, M) for batch in n_batches]),total=len(n_batches),desc='Computing corr arrays'))
+        corr_arr = list(tqdm(p.imap(return_corrs_train_and_target, [(batch, QC, Sample, M) for batch in n_batches]),total=len(n_batches),desc='Computing Correlation Matrices'))
         args_for_intersection = [(corrs_train, corrs_target, signals) for corrs_train, corrs_target in corr_arr]
     
         intersection = list(tqdm(p.imap(return_corr_intersection,args_for_intersection),total=len(n_batches),desc='Computing Intersection'))
@@ -162,10 +156,13 @@ def compute_pool(QC, Sample, M, n_batches,signals):
     
 if __name__ == "__main__":
     D = pd.read_csv("Data/2-peak_area_after_filling_missing_values.csv").drop(columns=['position','mz','rt'])
+    
     M = pd.read_csv("Data/sample_metadata_all_batches.csv")
     M.set_index('sample_name',inplace=True)
     D.set_index("name",inplace=True)
     D = D.T #shape = (n_samples,n_signals)
+    D = D[~D.index.str.contains("AOU_S_0104")]
+    D = TIC(D,scale=True)
     #D = D.sample(5000,axis=1,random_state=42)
     signals = D.columns.to_list()
     n_batches  = M.batch.unique()
@@ -182,13 +179,13 @@ if __name__ == "__main__":
     QC = grouping.get_group("qc")
     Sample = grouping.get_group('sample')
     all = pd.concat([QC,Sample])
-    #intersection = corr_pool(QC=QC,Sample=Sample,M=M,n_batches=n_batches,signals=signals)
     sys_err_pred = compute_pool(signals=signals,QC=QC,Sample=Sample,M=M,n_batches=n_batches)
     normed_dict = {}
     for batch,i in enumerate(sys_err_pred):
         current_batch = i[0]
         pred_dict = i[1]
         normed_dict[batch+1] = adjust_correction(pred_dict=pred_dict,current_batch=current_batch)
+    print("Removing Systematic Error")
     normed = pd.concat(normed_dict[x] for x in normed_dict)
     A = normed.loc[normed.index.isin(Sample.index)].median()
     B = all.loc[all.index.isin(QC.index)].median()
@@ -199,6 +196,8 @@ if __name__ == "__main__":
     c = (A + ((B - C) / D * E)) / F
     c = c.apply(lambda x: x if x>0 else 1)
     normed[normed.index.isin(QC.index)] = normed[normed.index.isin(QC.index)] * c
-    normed.to_csv("myserrf_sklearn_500_trees_all_signals.csv")
+    print("Saving Data")
+    normed.to_csv("serrf_imp.csv")
+    print("Done")
     
 
