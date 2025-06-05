@@ -7,10 +7,13 @@ from scipy.stats import rankdata
 from sklearn.model_selection import GridSearchCV
 
 class MetNorm:
-    def __init__(self,data,metadata):
+    def __init__(self,data,metadata,cv=False,model=None):
         self.data = data.copy() 
         self.metadata = metadata.copy()
-        self.model = SVR(C=1, epsilon=0.001, kernel='rbf', tol=0.001, gamma='auto', cache_size=40)
+        if model == None:
+            self.model = SVR(C=1, epsilon=0.001, kernel='rbf', tol=0.001, gamma='auto', cache_size=40)
+        else:
+            self.model = model
         self.QC = self.data[self.data.index.str.contains("_SP_")]
         self.QC_idx = self.QC.index
         self.sample = self.data[~self.data.index.str.contains("_SP_")]
@@ -22,6 +25,7 @@ class MetNorm:
         self.sample_signal = None
         self.sample_signal_idx = None
         self.normed = None
+        self.cv = cv
         self.param_grid = {'kernel': ['rbf', 'linear','poly'],'C': [0.1, 1, 10, 100],'gamma': ['scale','auto', 0.01, 0.1, 1],'epsilon': [0.01, 0.1, 0.5]}
         
     def _top_correlated(self,n=5,method='spearman'):
@@ -36,7 +40,7 @@ class MetNorm:
             df.drop(index=df.name,inplace=True)
             signal_dict[signal] = df.index.tolist()[:n]
         self.sorted_signals = signal_dict
-    def _fit(self,signal,corr,CV=5):
+    def _fit(self,signal,corr):
         self.scaler_X = StandardScaler()
         self.scaler_y = StandardScaler()
         X_train = self.QC.loc[:,corr].to_numpy()
@@ -45,9 +49,10 @@ class MetNorm:
         y_train = self.QC.loc[:,signal].to_numpy()
         y_train = y_train.reshape(-1,1)
         y_train = self.scaler_y.fit_transform(y_train).ravel()
+        CV = self.cv
         if CV:
             svr = SVR()
-            grid_search = GridSearchCV(svr,self.param_grid,cv=CV,scoring = 'r2',n_jobs=-1)
+            grid_search = GridSearchCV(svr,self.param_grid,cv=5,scoring = 'r2',n_jobs=-1)
             grid_search.fit(X_train,y_train)
             self.model = grid_search.best_estimator_
             self.best_params = grid_search.best_params_
