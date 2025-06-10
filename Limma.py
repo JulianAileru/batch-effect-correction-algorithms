@@ -37,7 +37,7 @@ def batchEffectCorrection(D, M, method='ls'):
         M = M.loc[D.columns]
 
         # Initialize design matrix with deviation encoding of categorical variables
-        design = patsy.dmatrix("1 + C(batch, Sum)", data=M)
+        design = patsy.dmatrix("1 + C(batch, Sum) + C(sample_type,Sum)", data=M)
         n_signals, n_samples = D.shape
         models = []
         n_batches = len(pd.Categorical(M["batch"]).categories)
@@ -66,13 +66,4 @@ def batchEffectCorrection(D, M, method='ls'):
     else:
         raise ValueError(f"Method '{method}' not implemented")
 
-#Testing
-"""
-D = pd.read_csv("log2_transformed_metadata-attached_for_limma.csv")
-D = D.rename(columns={"Unnamed: 0":"sample"})
-D.set_index("sample",inplace=True)
-M = D[["sample_type","batch","injection_order"]]
-D.drop(columns=["sample_type","batch","injection_order"],inplace=True)
-D = D.T
 
-"""
