@@ -4,9 +4,10 @@ import patsy
 import statsmodels.api as sm 
 def batchEffectCorrection(D, M, method='ls'):
     """
-    Limma Batch Effect Correction 
+    A python implementation for removeBatchEffect, a R function apart of LIMMA (linear models for Microarrays data) package. 
+    Removes unwanted batch effects by fitting a linear model to the data and removing the component due to batch effects.  
 
-    Arguments
+    Parameters
     ---------
     D: pd.DataFrame
         - Data Matrix of shape (n_signals, n_samples)
@@ -20,12 +21,19 @@ def batchEffectCorrection(D, M, method='ls'):
     -------
     pd.DataFrame
         - Batch-corrected data with same shape as input D (n_signals, n_samples)
+    References
+    -------
+    [1] Smyth, G. K. (2004). Linear models and empirical Bayes methods for assessing
+    differential expression in microarray experiments. Statistical Applications 
+    in Genetics and Molecular Biology, Vol. 3, No. 1, Article 3.
+    http://www.bepress.com/sagmb/vol3/iss1/art3
+
     """
     if D.shape[0] < D.shape[1]:
         raise ValueError("data matrix is expected to be shape (n_signals, n_samples)")
     
     if method == "ls":
-        #ensure data and batch labels have the same ordering
+        # Ensure data and batch labels have the same ordering
         M = M.loc[D.columns]
 
         # Initialize design matrix with deviation encoding of categorical variables
@@ -34,7 +42,7 @@ def batchEffectCorrection(D, M, method='ls'):
         models = []
         n_batches = len(pd.Categorical(M["batch"]).categories)
         
-        # Apply signal-wise OLS using statsmodels function
+        # Apply signal-wise OLS
         for i in range(n_signals):
             model = sm.OLS(D.iloc[i,:], design)
             results = model.fit(method='qr')
@@ -53,7 +61,8 @@ def batchEffectCorrection(D, M, method='ls'):
         batch_effect = batch_design @ batch_params.T
         adjusted_D = D - batch_effect.T  # Keep original shape
         
-        return adjusted_D.T  # Shape (n_samples, n_signals)
+        #Return Batch-Effect Corrected Data (n_samples, n_signals)
+        return adjusted_D.T
     else:
         raise ValueError(f"Method '{method}' not implemented")
 

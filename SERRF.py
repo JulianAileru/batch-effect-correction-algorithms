@@ -11,6 +11,45 @@ import os
 import sys 
 sys.path.append(os.path.abspath(".."))
 from utils.utility_functions import TIC
+"""
+A python implementation of SERRF (Systematic Error Removal using Random Forest). 
+The SERRF algorithm was originally implemented in R by Fan et al. in 2015
+
+Parameters
+---------
+QC : pd.DataFrame, QC samples dataframe of shape (n_samples, n_signals)
+Sample : pd.DataFrame, non-QC samples dataframe of shape (n_samples, n_signals)
+Metadata : pd.DataFrame, Metadata information about QC and non-QC samples
+n_batches : list, list of unique batch labels found in Metadata
+signals : list, list of all signals (across batches)
+
+Returns
+-------
+normed : pd.DataFrame
+    - Normalized DataFrame (n_samples x n_signals)
+
+References
+---------
+[1] Systematic Error Removal using Random Forest (SERRF) 
+for Normalizing Large-Scale Untargeted Lipidomics Data 
+Sili Fan, Tobias Kind, Tomas Cajka, Stanley L. Hazen, W. H. Wilson Tang, 
+Rima Kaddurah-Daouk, Marguerite R. Irvin, Donna K. Arnett, 
+Dinesh Kumar Barupal, and Oliver Fiehn Analytical Chemistry
+DOI: 10.1021/acs.analchem.8b05592
+
+"""
+def compute_pool(QC, Sample, M, n_batches,signals):
+    with Pool(processes=min(len(n_batches), 4)) as p:
+        corr_arr = list(tqdm(p.imap(return_corrs_train_and_target, [(batch, QC, Sample, M) for batch in n_batches]),total=len(n_batches),desc='Computing Correlation Matrices'))
+        args_for_intersection = [(corrs_train, corrs_target, signals) for corrs_train, corrs_target in corr_arr]
+    
+        intersection = list(tqdm(p.imap(return_corr_intersection,args_for_intersection),total=len(n_batches),desc='Computing Intersection'))
+        args_for_sys_error_pred = [(signals,QC,Sample,batch,M,intersection[i]) for i,batch in enumerate(n_batches)]
+    
+        print("Computing Systematic Error...")
+        sys_err_pred = list(p.imap(systematic_error_prediction,args_for_sys_error_pred))
+    return sys_err_pred
+
 
 def return_corrs_train_and_target(arg):
     batch,QC,Sample,M = arg
@@ -140,19 +179,6 @@ def adjust_correction(current_batch,pred_dict):
     normed = current_batch
     return normed 
         
-
-
-def compute_pool(QC, Sample, M, n_batches,signals):
-    with Pool(processes=min(len(n_batches), 4)) as p:
-        corr_arr = list(tqdm(p.imap(return_corrs_train_and_target, [(batch, QC, Sample, M) for batch in n_batches]),total=len(n_batches),desc='Computing Correlation Matrices'))
-        args_for_intersection = [(corrs_train, corrs_target, signals) for corrs_train, corrs_target in corr_arr]
-    
-        intersection = list(tqdm(p.imap(return_corr_intersection,args_for_intersection),total=len(n_batches),desc='Computing Intersection'))
-        args_for_sys_error_pred = [(signals,QC,Sample,batch,M,intersection[i]) for i,batch in enumerate(n_batches)]
-    
-        print("Computing Systematic Error...")
-        sys_err_pred = list(p.imap(systematic_error_prediction,args_for_sys_error_pred))
-    return sys_err_pred
     
 if __name__ == "__main__":
     D = pd.read_csv("Data/2-peak_area_after_filling_missing_values.csv").drop(columns=['position','mz','rt'])

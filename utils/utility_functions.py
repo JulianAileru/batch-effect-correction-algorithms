@@ -123,7 +123,7 @@ def PLSDA(D,M):
     y=y[(y.index.str.contains("_S_")) | (y.index.str.contains("_SP_")) ]
     y = pd.get_dummies(y)
     sp_study = D[(D.index.str.contains("_S_")) | (D.index.str.contains("_SP_"))]
-    y = y.loc[:,sp_study.index]
+    y = y.loc[sp_study.index,:]
     # y = y.loc[D.index.tolist()]
     X = sp_study
     scores = cross_validate(pipe, X, y, cv=5, scoring={'Q2': q2_scorer, 'R2': 'r2'})
