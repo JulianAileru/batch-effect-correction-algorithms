@@ -53,7 +53,7 @@ class MetNorm:
         self.sample_signal_idx = None
         self.normed = None
         self.cv = cv
-        self.model = model if model is not None else SVR()
+        self.model = model if model is not None else SVR(kernel='rbf',gamma='scale', tol=0.001, C=1.0, epsilon=0.1, shrinking=True)
         self.param_grid = {'kernel': ['rbf', 'linear','poly'],'C': [0.1, 1, 10, 100],'gamma': ['scale','auto', 0.01, 0.1, 1],'epsilon': [0.01, 0.1, 0.5]}
         
     def _top_correlated(self,n=5,method='spearman'):
